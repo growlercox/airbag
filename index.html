@@ -431,7 +431,7 @@ body.light .toggle-thumb { transform: translateX(18px); background: var(--accent
 
   <div class="grid4">
     <div class="input-card"><label class="input-label">Capital portefeuille</label><div class="input-row"><input class="ni" type="number" id="capital" value="10000" step="100" min="0"/><span class="ni-unit">€</span></div></div>
-    <div class="input-card"><label class="input-label">% capital à risquer</label><div class="input-row"><input class="ni" type="number" id="risquepct" value="2" step="0.1" min="0.1" max="100"/><span class="ni-unit">%</span></div></div>
+    <div class="input-card"><label class="input-label">% capital à risquer</label><div class="input-row"><input class="ni" type="number" id="risquepct" value="0.5" step="0.1" min="0.1" max="100"/><span class="ni-unit">%</span></div></div>
     <div class="input-card"><label class="input-label">Frais de courtage</label><div class="input-row"><input class="ni" type="number" id="frais" value="0" step="0.01" min="0" max="5" placeholder="0"/><span class="ni-unit">%</span></div><div class="ni-note">par ordre (achat + vente)</div></div>
     <div class="input-card dashed"><label class="input-label">Stop utilisé</label><div class="input-row"><input class="ni" type="number" id="stop-sizing" step="0.01" min="0" placeholder="auto"/><span class="ni-unit">€</span></div><div class="ni-note" id="stop-source">↑ calculé ci-dessus</div></div>
   </div>
@@ -884,7 +884,7 @@ async function addTrade() {
   var newId = await saveTrade(trade);
   if (btn) { btn.disabled = false; btn.textContent = '+ Ajouter au portefeuille'; }
   if (!newId) return;
-  trades.push(Object.assign({}, trade, {id: newId}));
+  trades.push(Object.assign({}, trade, {id: newId, created_at: new Date().toISOString()}));
   renderTrades(capital);
   document.getElementById('portefeuille').scrollIntoView({behavior: 'smooth', block: 'start'});
 }
@@ -1029,8 +1029,20 @@ window.addEventListener('load', function() {
   var inputsSizing = ['capital', 'risquepct', 'frais'];
   inputsSizing.forEach(function(id) {
     var el = document.getElementById(id);
-    if (el) el.addEventListener('input', calcSizing);
+    if (el) el.addEventListener('input', function() {
+      calcSizing();
+      // Mémorise le capital
+      if (id === 'capital') {
+        try { localStorage.setItem('airbag_capital', this.value); } catch(e) {}
+      }
+    });
   });
+
+  // Restaure le capital mémorisé
+  try {
+    var savedCapital = localStorage.getItem('airbag_capital');
+    if (savedCapital) document.getElementById('capital').value = savedCapital;
+  } catch(e) {}
 
   var stopSizing = document.getElementById('stop-sizing');
   if (stopSizing) stopSizing.addEventListener('input', onManualStop);
