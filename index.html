@@ -444,7 +444,8 @@ body.light .toggle-thumb { transform: translateX(18px); background: var(--accent
   </div>
 
   <div class="btn-row">
-    <button class="btn" onclick="addTrade()">+ Ajouter au portefeuille</button>
+    <button class="btn" onclick="addTrade()" id="add-trade-btn">+ Ajouter au portefeuille</button>
+    <button class="btn" id="cancel-edit-btn" onclick="cancelEdit()" style="display:none;border-color:var(--amber);color:var(--amber);">✕ Annuler</button>
     <button class="btn primary" onclick="exportTrade()">↓ Exporter la fiche trade</button>
   </div>
 </div>
@@ -629,7 +630,7 @@ async function loadTrades() {
   try {
     var result = await db.from('trades').select('*').eq('smf_username', currentUserId).order('created_at', {ascending: true});
     if (result.error) { showToast('Erreur chargement', 'error'); return; }
-    trades = result.data.map(function(row) { return Object.assign({}, row.data, {id: row.id}); });
+    trades = result.data.map(function(row){ return Object.assign({}, row.data, {id:row.id, created_at:row.created_at}); });
     var capital = parseFloat(document.getElementById('capital').value) || 10000;
     renderTrades(capital);
   } catch(e) { console.error(e); showToast('Erreur chargement', 'error'); }
@@ -787,6 +788,81 @@ function onManualStop() {
   calcSizing();
 }
 
+// ── Edition d'un trade ───────────────────────────────────
+var editingTradeId = null;
+
+function loadTradeIntoForm(id) {
+  var t = trades.find(function(x){ return x.id === id; });
+  if (!t) return;
+  editingTradeId = id;
+
+  // Bascule en mode 2 (stop connu) sans appeler switchTab qui vide input2
+  mode = 2;
+  var tab1 = document.getElementById('tab1');
+  var tab2 = document.getElementById('tab2');
+  if (tab1) tab1.classList.remove('active');
+  if (tab2) tab2.classList.add('active');
+  var lbl = document.getElementById('input2-label');
+  if (lbl) lbl.textContent = 'Stop (support graphique)';
+  var inp2 = document.getElementById('input2');
+  if (inp2) inp2.placeholder = 'Votre stop';
+  var desc = document.getElementById('desc');
+  if (desc) desc.innerHTML = descs[1];
+
+  // Remplit les champs
+  document.getElementById('ticker').value = t.ticker || '';
+  document.getElementById('achat').value = t.achat || '';
+  if (inp2) inp2.value = t.stop || '';
+  document.getElementById('capital').value = t.capital || '';
+  document.getElementById('risquepct').value = t.risquepct || 2;
+  document.getElementById('pct').value = t.pct || 50;
+  document.getElementById('pct-out').textContent = (t.pct || 50) + '%';
+
+  // Recalcule
+  calc();
+
+  // Change le bouton en mode édition
+  var btn = document.getElementById('add-trade-btn');
+  if (btn) { btn.textContent = '\u270F Mettre à jour ce trade'; btn.style.background = 'var(--amber)'; btn.style.color = '#000'; btn.style.borderColor = 'var(--amber)'; }
+  var cb = document.getElementById('cancel-edit-btn');
+  if (cb) cb.style.display = 'inline-block';
+
+  document.getElementById('neutralisation').scrollIntoView({behavior:'smooth', block:'start'});
+  showToast('Trade chargé — modifiez et mettez à jour', 'success');
+}
+window.loadTradeIntoForm = loadTradeIntoForm;
+
+function cancelEdit() {
+  editingTradeId = null;
+  var btn = document.getElementById('add-trade-btn');
+  if (btn) { btn.textContent = '+ Ajouter au portefeuille'; btn.style.background = ''; btn.style.color = ''; btn.style.borderColor = ''; }
+  var cb = document.getElementById('cancel-edit-btn');
+  if (cb) cb.style.display = 'none';
+}
+window.cancelEdit = cancelEdit;
+
+async function updateTrade(id) {
+  var ticker = document.getElementById('ticker').value.trim() || '\u2014';
+  var achat  = parseFloat(document.getElementById('achat').value) || 0;
+  var stopVal = parseFloat(document.getElementById('stop-sizing').value) || calcedStop;
+  var capital = parseFloat(document.getElementById('capital').value) || 0;
+  var pct = parseFloat(document.getElementById('pct').value) || 50;
+  var risquepct = parseFloat(document.getElementById('risquepct').value) || 2;
+  if (nbTitresCurrent <= 0 || capital <= 0) { showToast('Paramètres invalides', 'error'); return; }
+  var trade = {ticker:ticker, achat:achat, stop:stopVal, target:calcedTarget, nb:nbTitresCurrent,
+    investi:investiCurrent, risque:risqueEurCurrent, gain:nbTitresCurrent*(calcedTarget-achat),
+    pct:pct, capital:capital, risquepct:risquepct};
+  try {
+    var result = await db.from('trades').update({data: trade}).eq('id', id).eq('smf_username', currentUserId);
+    if (result.error) { showToast('Erreur mise à jour', 'error'); console.error(result.error); return; }
+    var idx = trades.findIndex(function(x){ return x.id === id; });
+    if (idx >= 0) trades[idx] = Object.assign({}, trade, {id:id, created_at:trades[idx].created_at});
+    renderTrades(parseFloat(document.getElementById('capital').value) || 10000);
+    showToast('Trade mis à jour !', 'success');
+    cancelEdit();
+  } catch(e) { console.error(e); showToast('Erreur mise à jour', 'error'); }
+}
+
 async function addTrade() {
   if (!currentUser) { showToast('Entre ton pseudo d\'abord', 'error'); return; }
   var ticker = document.getElementById('ticker').value.trim() || '—';
@@ -837,7 +913,7 @@ function renderTrades(capital) {
     var ps = ((t.stop - t.achat) / t.achat * 100).toFixed(2);
     var pt = ((t.target - t.achat) / t.achat * 100).toFixed(2);
     html += '<div class="trade-row fade-in">' +
-      '<span style="font-family:var(--mono);font-weight:600">' + t.ticker + '</span>' +
+      '<div style="display:flex;flex-direction:column;gap:2px;"><span onclick="loadTradeIntoForm(' + t.id + ')" style="font-family:var(--mono);font-weight:600;cursor:pointer;text-decoration:underline;text-decoration-style:dotted;color:var(--accent);" title="Modifier">' + t.ticker + '</span>' + (t.created_at ? '<span style="font-family:var(--mono);font-size:9px;color:var(--text3);">' + new Date(t.created_at).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'2-digit'}) + '</span>' : '') + '</div>' +
       '<span style="font-family:var(--mono);font-size:12px;color:var(--text2)">' + t.nb + ' × ' + t.achat.toFixed(2) + '€</span>' +
       '<span style="font-family:var(--mono);font-size:12px;color:var(--red)">stop ' + t.stop.toFixed(2) + '€ (' + ps + '%)</span>' +
       '<span style="font-family:var(--mono);font-size:12px;color:var(--green)">target ' + t.target.toFixed(2) + '€ (+' + pt + '%)</span>' +
