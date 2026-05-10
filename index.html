@@ -594,6 +594,12 @@ function onUserConnected(session) {
   document.getElementById('nav-user').textContent = displayName;
   var nb = document.getElementById('nav-logout');
   if (nb) nb.style.display = 'inline';
+
+  // Restaure le capital depuis les métadonnées Supabase
+  if (meta && meta.capital) {
+    document.getElementById('capital').value = meta.capital;
+  }
+
   loadTrades();
 }
 
@@ -1031,18 +1037,15 @@ window.addEventListener('load', function() {
     var el = document.getElementById(id);
     if (el) el.addEventListener('input', function() {
       calcSizing();
-      // Mémorise le capital
-      if (id === 'capital') {
-        try { localStorage.setItem('airbag_capital', this.value); } catch(e) {}
+      // Mémorise le capital dans Supabase (par utilisateur)
+      if (id === 'capital' && currentUserId && db) {
+        var capVal = this.value;
+        db.auth.updateUser({data: {capital: capVal}}).catch(function(e){console.error('capital save:', e);});
       }
     });
   });
 
-  // Restaure le capital mémorisé
-  try {
-    var savedCapital = localStorage.getItem('airbag_capital');
-    if (savedCapital) document.getElementById('capital').value = savedCapital;
-  } catch(e) {}
+  // Capital restauré depuis Supabase dans onUserConnected
 
   var stopSizing = document.getElementById('stop-sizing');
   if (stopSizing) stopSizing.addEventListener('input', onManualStop);
