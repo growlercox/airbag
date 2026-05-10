@@ -204,76 +204,6 @@ input[type=range] { width:100%; accent-color:var(--airbag); height:4px; cursor:p
   .trade-row{grid-template-columns:1fr auto auto}
   nav{padding:0 16px}
 }
-
-/* ── LIGHT MODE ─────────────────────────────────────── */
-body.light {
-  --bg: #e8eef5;
-  --bg2: #ffffff;
-  --bg3: #f0f4f8;
-  --bg4: #e2e8f0;
-  --border: rgba(180,190,210,0.4);
-  --border2: rgba(180,190,210,0.7);
-  --text: #1a2035;
-  --text2: #3a4560;
-  --text3: #6a7590;
-  --green: #00a86b;
-  --red: #e5303a;
-  --amber: #d97706;
-  --accent: #4361ee;
-  --accent2: #7c3aed;
-  --airbag: #4361ee;
-}
-body.light { background-image: linear-gradient(135deg, #dde8f5 0%, #e8e0f5 35%, #ddf0ec 70%, #f0eadd 100%); }
-body.light::before { background: none; }
-body.light nav, body.light header { background: rgba(232,238,245,0.9) !important; border-bottom-color: rgba(180,190,210,0.4) !important; }
-body.light .input-card,
-body.light .slider-card,
-body.light .metric,
-body.light .vis-card,
-body.light .bar-card,
-body.light .trade-row,
-body.light .empty-msg { background: rgba(255,255,255,0.7) !important; border-color: rgba(255,255,255,0.9) !important; box-shadow: 0 4px 16px rgba(100,120,160,0.1) !important; }
-body.light .btn { background: rgba(255,255,255,0.7) !important; border-color: rgba(180,190,210,0.6) !important; color: var(--text2) !important; }
-body.light .desc { background: rgba(67,97,238,0.06) !important; }
-body.light .ni { color: var(--text) !important; }
-body.light .ni::placeholder { color: rgba(67,97,238,0.4) !important; }
-body.light .tab { background: rgba(255,255,255,0.6) !important; border-color: rgba(180,190,210,0.5) !important; color: var(--text3) !important; }
-body.light .tab.active { background: linear-gradient(135deg,var(--accent),var(--accent2)) !important; color: white !important; border-color: transparent !important; }
-body.light .toast { background: rgba(255,255,255,0.95) !important; }
-body.light .login-overlay, body.light .auth-overlay { background: rgba(200,215,235,0.8) !important; }
-body.light .login-box, body.light .auth-box { background: rgba(255,255,255,0.85) !important; border-color: rgba(255,255,255,0.95) !important; }
-body.light .auth-input { background: rgba(255,255,255,0.8) !important; color: #1a2035 !important; border-color: rgba(180,190,210,0.6) !important; }
-body.light .auth-tabs { background: rgba(100,120,160,0.08) !important; }
-body.light .auth-tab.active { background: white !important; color: var(--accent) !important; }
-body.light .slider-val { color: var(--accent) !important; text-shadow: none !important; }
-body.light .bar-wrap { background: rgba(100,120,160,0.1) !important; }
-body.light .metric-val { color: var(--text) !important; }
-body.light .section-num { text-shadow: none !important; }
-
-/* TOGGLE SWITCH */
-.theme-toggle {
-  display: flex; align-items: center; gap: 8px;
-  margin-left: auto; margin-right: 16px;
-  font-family: var(--mono); font-size: 10px; color: var(--text3);
-  user-select: none;
-}
-.toggle-track {
-  width: 40px; height: 22px; border-radius: 999px;
-  background: rgba(255,255,255,0.1);
-  border: 1px solid var(--border2);
-  position: relative; cursor: pointer;
-  transition: background .3s;
-}
-body.light .toggle-track { background: rgba(67,97,238,0.15); border-color: rgba(67,97,238,0.3); }
-.toggle-thumb {
-  width: 16px; height: 16px; border-radius: 50%;
-  background: var(--text3);
-  position: absolute; top: 2px; left: 2px;
-  transition: transform .3s, background .3s;
-}
-body.light .toggle-thumb { transform: translateX(18px); background: var(--accent); }
-.toggle-icon { font-size: 13px; }
-
 </style>
 </head>
 <body>
@@ -355,12 +285,7 @@ body.light .toggle-thumb { transform: translateX(18px); background: var(--accent
   <a class="nav-link" href="#sizing">02 Sizing</a>
   <span class="nav-sep">·</span>
   <a class="nav-link" href="#portefeuille">03 Portefeuille</a>
-  <div style="margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--text3);display:flex;align-items:center;gap:12px;">
-    <div class="theme-toggle" onclick="toggleTheme()" title="Changer de thème">
-      <span class="toggle-icon">🌙</span>
-      <div class="toggle-track"><div class="toggle-thumb"></div></div>
-      <span class="toggle-icon">☀️</span>
-    </div>
+  <div style="margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--text3);">
     <span id="nav-user"></span>
   </div>
 </nav>
@@ -491,20 +416,7 @@ let mode = 2, calcedStop = 90, calcedTarget = 130, calcedAchat = 100;
 let nbTitresCurrent = 0, investiCurrent = 0, risqueEurCurrent = 0;
 let trades = [];
 
-// ── Theme toggle ─────────────────────────────────────────
-function toggleTheme() {
-  var isLight = document.body.classList.toggle('light');
-  try { localStorage.setItem('airbag_theme', isLight ? 'light' : 'dark'); } catch(e) {}
-}
-window.toggleTheme = toggleTheme;
-
-function initTheme() {
-  try {
-    var saved = localStorage.getItem('airbag_theme');
-    if (saved === 'light') document.body.classList.add('light');
-  } catch(e) {}
-}
-initTheme();
+// ── Toast ────────────────────────────────────────────────
 function showToast(msg, type) {
   var t = document.getElementById('toast');
   if (!t) return;
