@@ -745,17 +745,28 @@ function loadTradeIntoForm(id) {
   var t = trades.find(function(x){ return x.id === id; });
   if (!t) return;
   editingTradeId = id;
+
+  // Met le mode 2 manuellement sans appeler switchTab (qui vide input2)
+  mode = 2;
+  document.getElementById('tab1').classList.remove('active');
+  document.getElementById('tab2').classList.add('active');
+  document.getElementById('input2-label').textContent = 'Stop (support graphique)';
+  document.getElementById('input2').placeholder = 'Votre stop';
+  document.getElementById('desc').innerHTML = descs[1];
+
+  // Remplit tous les champs
   document.getElementById('ticker').value = t.ticker || '';
   document.getElementById('achat').value = t.achat || '';
+  document.getElementById('input2').value = t.stop || '';
   document.getElementById('capital').value = t.capital || '';
   document.getElementById('risquepct').value = t.risquepct || 2;
   document.getElementById('pct').value = t.pct || 50;
   document.getElementById('pct-out').textContent = (t.pct || 50) + '%';
-  // switchTab remet input2 à vide — on met le stop APRÈS
-  switchTab(2);
-  document.getElementById('input2').value = t.stop || '';
-  // Déclenche le recalcul après que le DOM soit à jour
-  setTimeout(function() { calc(); }, 50);
+
+  // Recalcule
+  calc();
+  calcSizing();
+
   var btn = document.querySelector('button[onclick="addTrade()"]');
   if (btn) { btn.textContent = '✏ Mettre à jour ce trade'; btn.style.background = 'var(--amber)'; btn.style.color = '#000'; btn.style.borderColor = 'var(--amber)'; }
   var cb = document.getElementById('cancel-edit-btn');
