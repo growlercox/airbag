@@ -241,10 +241,24 @@ body.light .toast { background: rgba(255,255,255,0.97) !important; }
   <div class="login-box">
     <div class="login-logo">Air<span>bag</span></div>
     <div class="login-sub">Money management & neutralisation de trade</div>
-    <label class="login-label">Ton pseudo du forum</label>
-    <input class="login-input" type="text" id="login-input" placeholder="ex: Samy94" maxlength="50"/>
-    <button class="login-btn" onclick="doLogin()">Accéder à l'outil →</button>
-    <div class="login-hint">Utilisé pour sauvegarder ton portefeuille · mémorisé sur cet appareil</div>
+    <div style="display:flex;gap:6px;margin-bottom:20px;background:rgba(255,255,255,0.06);border-radius:8px;padding:4px;">
+      <button id="auth-tab-login" onclick="showAuthTab('login')" style="flex:1;padding:8px;border-radius:6px;border:none;background:rgba(255,255,255,0.15);color:var(--text);font-family:var(--mono);font-size:12px;cursor:pointer;font-weight:500;">Connexion</button>
+      <button id="auth-tab-signup" onclick="showAuthTab('signup')" style="flex:1;padding:8px;border-radius:6px;border:none;background:transparent;color:var(--text3);font-family:var(--mono);font-size:12px;cursor:pointer;">Créer un compte</button>
+    </div>
+    <div id="auth-name-field" style="display:none;">
+      <label class="login-label">Pseudo / Nom affiché</label>
+      <input class="login-input" type="text" id="auth-name" placeholder="Votre pseudo"/>
+    </div>
+    <label class="login-label">Email</label>
+    <input class="login-input" type="email" id="auth-email" placeholder="votre@email.com"/>
+    <label class="login-label">Mot de passe</label>
+    <input class="login-input" type="password" id="auth-password" placeholder="Minimum 6 caractères"/>
+    <div id="auth-error" style="font-family:var(--mono);font-size:11px;color:var(--red);min-height:16px;margin-bottom:10px;text-align:center;"></div>
+    <button class="login-btn" id="auth-submit-btn" onclick="submitAuth()">Se connecter →</button>
+    <div style="margin-top:10px;">
+      <button onclick="showForgot()" id="forgot-link" style="background:none;border:none;cursor:pointer;font-family:var(--mono);font-size:10px;color:var(--text3);text-decoration:underline;">Mot de passe oublié ?</button>
+    </div>
+    <div class="login-hint">Vos trades sont sauvegardés et sécurisés</div>
   </div>
 </div>
 
@@ -474,63 +488,91 @@ function showToast(msg, type) {
 }
 
 // ── Login ────────────────────────────────────────────────
-function doLogin() {
-  var val = document.getElementById('login-input').value.trim();
-  if (!val) { showToast('Pseudo introuvable', 'error'); return; }
-  currentUser = val;
-  try { localStorage.setItem('airbag_user', val); } catch(e) {}
+var authMode = 'login';
+var currentUserId = null;
+
+function showAuthTab(tab) {
+  authMode = tab;
+  var isS = tab === 'signup';
+  var tl = document.getElementById('auth-tab-login');
+  var ts = document.getElementById('auth-tab-signup');
+  if(tl){tl.style.background=isS?'transparent':'rgba(255,255,255,0.15)';tl.style.color=isS?'var(--text3)':'var(--text)';}
+  if(ts){ts.style.background=isS?'rgba(255,255,255,0.15)':'transparent';ts.style.color=isS?'var(--text)':'var(--text3)';}
+  var nf=document.getElementById('auth-name-field'); if(nf) nf.style.display=isS?'block':'none';
+  var btn=document.getElementById('auth-submit-btn'); if(btn) btn.textContent=isS?'Créer mon compte →':'Se connecter →';
+  var fl=document.getElementById('forgot-link'); if(fl) fl.style.display=isS?'none':'inline';
+  var err=document.getElementById('auth-error'); if(err) err.textContent='';
+}
+window.showAuthTab = showAuthTab;
+
+function showForgot() {
+  var email = document.getElementById('auth-email').value.trim();
+  var errEl = document.getElementById('auth-error');
+  if (!email) { errEl.textContent = "Entrez votre email d'abord."; return; }
+  db.auth.resetPasswordForEmail(email, {redirectTo: window.location.href}).then(function(res) {
+    if (res.error) { errEl.textContent = res.error.message; }
+    else { errEl.style.color='var(--green)'; errEl.textContent='Email de réinitialisation envoyé !'; }
+  });
+}
+window.showForgot = showForgot;
+
+async function submitAuth() {
+  var email = document.getElementById('auth-email').value.trim();
+  var password = document.getElementById('auth-password').value;
+  var errEl = document.getElementById('auth-error');
+  errEl.style.color = 'var(--red)';
+  if (!email || !password) { errEl.textContent = 'Remplissez tous les champs.'; return; }
+  if (password.length < 6) { errEl.textContent = 'Mot de passe minimum 6 caractères.'; return; }
+  var btn = document.getElementById('auth-submit-btn');
+  btn.disabled = true; btn.textContent = 'Chargement…';
+  try {
+    var res;
+    if (authMode === 'signup') {
+      var name = document.getElementById('auth-name').value.trim() || email.split('@')[0];
+      res = await db.auth.signUp({email:email, password:password, options:{data:{display_name:name}}});
+      if (!res.error) { errEl.style.color='var(--green)'; errEl.textContent='Compte créé ! Connexion…'; }
+    } else {
+      res = await db.auth.signInWithPassword({email:email, password:password});
+    }
+    if (res.error) {
+      var msg = res.error.message;
+      if (msg==='Invalid login credentials') msg='Email ou mot de passe incorrect.';
+      errEl.textContent = msg;
+      btn.disabled = false;
+      btn.textContent = authMode==='signup'?'Créer mon compte →':'Se connecter →';
+    }
+  } catch(e) { errEl.textContent='Erreur inattendue.'; btn.disabled=false; }
+}
+window.submitAuth = submitAuth;
+
+function onUserConnected(session) {
+  currentUserId = session.user.id;
+  var meta = session.user.user_metadata;
+  var displayName = (meta && meta.display_name) ? meta.display_name : session.user.email.split('@')[0];
+  currentUser = displayName;
   document.getElementById('login-overlay').style.display = 'none';
-  var nu = document.getElementById('nav-user');
-  if (nu) nu.textContent = val;
+  document.getElementById('nav-user').textContent = displayName;
+  var nb = document.getElementById('nav-logout'); if(nb) nb.style.display = 'inline';
   loadTrades();
 }
 
-function detectSMFUser() {
-  // Tente de lire le pseudo depuis la page parente (même domaine)
-  try {
-    var parentDoc = window.parent.document;
-    // SMF affiche le pseudo dans plusieurs endroits possibles
-    var selectors = [
-      '#menu_nav .username',
-      '.username a',
-      '#top_info .username',
-      'a[href*="action=profile"]',
-      '#user_menu_top',
-      '.logged a:first-child',
-      'li.welcome b',
-    ];
-    for (var i = 0; i < selectors.length; i++) {
-      var el = parentDoc.querySelector(selectors[i]);
-      if (el && el.textContent.trim()) {
-        return el.textContent.trim().replace(/[^a-zA-Z0-9_\-\.àâäéèêëîïôöùûüçÀÂÄÉÈÊËÎÏÔÖÙÛÜÇ ]/g, '').trim();
-      }
-    }
-    // Cherche le lien profil qui contient le pseudo
-    var links = parentDoc.querySelectorAll('a[href*="action=profile"]');
-    for (var j = 0; j < links.length; j++) {
-      var txt = links[j].textContent.trim();
-      if (txt && txt.length > 1 && txt.length < 40) return txt;
-    }
-  } catch(e) {
-    console.log('Lecture parent bloquée:', e);
-  }
-  return null;
+async function doLogout() {
+  await db.auth.signOut();
+  currentUser=''; currentUserId=null; trades=[];
+  renderTrades(parseFloat(document.getElementById('capital').value)||10000);
+  document.getElementById('nav-user').textContent='';
+  var nb=document.getElementById('nav-logout'); if(nb) nb.style.display='none';
+  var ae=document.getElementById('auth-email'); if(ae) ae.value='';
+  var ap=document.getElementById('auth-password'); if(ap) ap.value='';
+  var ae2=document.getElementById('auth-error'); if(ae2) ae2.textContent='';
+  var btn=document.getElementById('auth-submit-btn'); if(btn){btn.disabled=false;btn.textContent='Se connecter →';}
+  showAuthTab('login');
+  document.getElementById('login-overlay').style.display='flex';
 }
+window.doLogout = doLogout;
 
-function changeUser() {
-  try { localStorage.removeItem('airbag_user'); } catch(e) {}
-  currentUser = '';
-  trades = [];
-  var capital = parseFloat(document.getElementById('capital').value) || 10000;
-  renderTrades(capital);
-  var li = document.getElementById('login-input');
-  if (li) li.value = '';
-  var nu = document.getElementById('nav-user');
-  if (nu) nu.textContent = '';
-  document.getElementById('login-overlay').style.display = 'flex';
-}
-window.changeUser = changeUser;
-window.doLogin = doLogin;
+
+
 window.switchTab = switchTab;
 window.calc = calc;
 window.onManualStop = onManualStop;
@@ -542,9 +584,9 @@ window.exportPortfolio = exportPortfolio;
 
 // ── Supabase CRUD ────────────────────────────────────────
 async function loadTrades() {
-  if (!db || !currentUser) return;
+  if (!db || !currentUserId) return;
   try {
-    var result = await db.from('trades').select('*').eq('smf_username', currentUser).order('created_at', {ascending: true});
+    var result = await db.from('trades').select('*').eq('smf_username', currentUserId).order('created_at', {ascending: true});
     if (result.error) { showToast('Erreur chargement', 'error'); return; }
     trades = result.data.map(function(row) { return Object.assign({}, row.data, {id: row.id, created_at: row.created_at}); });
     var capital = parseFloat(document.getElementById('capital').value) || 10000;
@@ -553,11 +595,11 @@ async function loadTrades() {
 }
 
 async function saveTrade(trade) {
-  if (!db) { showToast('Base non connectée', 'error'); return null; }
+  if (!db || !currentUserId) { showToast('Non connecté', 'error'); return null; }
   try {
     var data = Object.assign({}, trade);
     delete data.id;
-    var result = await db.from('trades').insert({smf_user_id: 0, smf_username: currentUser, data: data}).select().single();
+    var result = await db.from('trades').insert({smf_user_id: 0, smf_username: currentUserId, data: data}).select().single();
     if (result.error) { showToast('Erreur sauvegarde', 'error'); console.error(result.error); return null; }
     showToast('Trade sauvegardé !', 'success');
     return result.data.id;
@@ -567,7 +609,7 @@ async function saveTrade(trade) {
 async function deleteTrade(id) {
   if (!db) return;
   try {
-    await db.from('trades').delete().eq('id', id).eq('smf_username', currentUser);
+    await db.from('trades').delete().eq('id', id).eq('smf_username', currentUserId);
   } catch(e) { console.error(e); }
 }
 
@@ -768,7 +810,7 @@ async function updateTrade(id) {
 
   try {
     var data = Object.assign({}, trade);
-    var result = await db.from('trades').update({data: data}).eq('id', id).eq('smf_username', currentUser);
+    var result = await db.from('trades').update({data: data}).eq('id', id).eq('smf_username', currentUserId);
     if (result.error) { showToast('Erreur mise à jour', 'error'); return; }
     // Met à jour localement
     var idx = trades.findIndex(function(x) { return x.id === id; });
@@ -981,38 +1023,17 @@ window.addEventListener('load', function() {
     console.error('Supabase init error:', e);
   }
 
-  // Restaure l'utilisateur depuis localStorage
-  try { currentUser = localStorage.getItem('airbag_user') || ''; } catch(e) { currentUser = ''; }
+  // Init Supabase Auth
+  showAuthTab('login');
+  db.auth.onAuthStateChange(function(event, session) {
+    if (session && session.user) onUserConnected(session);
+    else document.getElementById('login-overlay').style.display = 'flex';
+  });
+  db.auth.getSession().then(function(r) {
+    if (r.data && r.data.session) onUserConnected(r.data.session);
+  });
 
-  // Tente de détecter le pseudo SMF automatiquement
-  var smfUser = detectSMFUser();
-  if (smfUser) {
-    // Pseudo détecté depuis la page parente — on vérifie ou remplace le localStorage
-    if (currentUser && currentUser !== smfUser) {
-      // Utilisateur différent détecté : on force le bon pseudo
-      try { localStorage.removeItem('airbag_user'); } catch(e) {}
-      currentUser = '';
-    }
-    if (!currentUser) {
-      // Auto-login avec le pseudo SMF
-      currentUser = smfUser;
-      try { localStorage.setItem('airbag_user', smfUser); } catch(e) {}
-    }
-  }
-
-  // Prépare l'overlay de login
-  var loginInput = document.getElementById('login-input');
-  if (smfUser && loginInput) {
-    // Pré-rempli et verrouillé si détecté depuis SMF
-    loginInput.value = smfUser;
-    loginInput.readOnly = true;
-    loginInput.style.opacity = '0.6';
-    loginInput.style.cursor = 'not-allowed';
-    var hint = document.querySelector('.login-hint');
-    if (hint) hint.textContent = 'Pseudo détecté depuis le forum — connexion automatique';
-  }
-
-  // Attache tous les event listeners sur les inputs
+  // Attache tous les event  // Attache tous les event listeners sur les inputs
   var inputsCalc = ['achat', 'input2'];
   inputsCalc.forEach(function(id) {
     var el = document.getElementById(id);
@@ -1035,16 +1056,9 @@ window.addEventListener('load', function() {
   if (stopSizing) stopSizing.addEventListener('input', onManualStop);
 
   // Listener entrée clavier sur le login
-  if (loginInput) loginInput.addEventListener('keydown', function(e) { if (e.key === 'Enter') doLogin(); });
+  ['auth-email','auth-password','auth-name'].forEach(function(id){var el=document.getElementById(id);if(el)el.addEventListener('keydown',function(e){if(e.key==='Enter')submitAuth();});});
 
   // Si connecté, masque l'overlay et charge les trades
-  if (currentUser) {
-    document.getElementById('login-overlay').style.display = 'none';
-    var nu = document.getElementById('nav-user');
-    if (nu) nu.textContent = currentUser;
-    loadTrades();
-  }
-
   // Init calcul — onglet "Trouver le target" par défaut
   switchTab(2);
 });
