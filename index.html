@@ -751,9 +751,11 @@ function loadTradeIntoForm(id) {
   document.getElementById('risquepct').value = t.risquepct || 2;
   document.getElementById('pct').value = t.pct || 50;
   document.getElementById('pct-out').textContent = (t.pct || 50) + '%';
+  // switchTab remet input2 à vide — on met le stop APRÈS
   switchTab(2);
   document.getElementById('input2').value = t.stop || '';
-  calc();
+  // Déclenche le recalcul après que le DOM soit à jour
+  setTimeout(function() { calc(); }, 50);
   var btn = document.querySelector('button[onclick="addTrade()"]');
   if (btn) { btn.textContent = '✏ Mettre à jour ce trade'; btn.style.background = 'var(--amber)'; btn.style.color = '#000'; btn.style.borderColor = 'var(--amber)'; }
   var cb = document.getElementById('cancel-edit-btn');
