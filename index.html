@@ -738,25 +738,81 @@ function onManualStop() {
   calcSizing();
 }
 
-async function addTrade() {
-  if (!currentUser) { showToast('Entre ton pseudo d\'abord', 'error'); return; }
+// ── Edition d'un trade existant ──────────────────────────
+var editingTradeId = null;
+
+function loadTradeIntoForm(id) {
+  var t = trades.find(function(x){ return x.id === id; });
+  if (!t) return;
+  editingTradeId = id;
+  document.getElementById('ticker').value = t.ticker || '';
+  document.getElementById('achat').value = t.achat || '';
+  document.getElementById('capital').value = t.capital || '';
+  document.getElementById('risquepct').value = t.risquepct || 2;
+  document.getElementById('pct').value = t.pct || 50;
+  document.getElementById('pct-out').textContent = (t.pct || 50) + '%';
+  switchTab(2);
+  document.getElementById('input2').value = t.stop || '';
+  calc();
+  var btn = document.querySelector('button[onclick="addTrade()"]');
+  if (btn) { btn.textContent = '✏ Mettre à jour ce trade'; btn.style.background = 'var(--amber)'; btn.style.color = '#000'; btn.style.borderColor = 'var(--amber)'; }
+  var cb = document.getElementById('cancel-edit-btn');
+  if (cb) cb.style.display = 'inline-block';
+  document.getElementById('neutralisation').scrollIntoView({behavior:'smooth', block:'start'});
+  showToast('Trade chargé — modifiez et mettez à jour', 'success');
+}
+window.loadTradeIntoForm = loadTradeIntoForm;
+
+function cancelEdit() {
+  editingTradeId = null;
+  var btn = document.querySelector('button[onclick="addTrade()"]');
+  if (btn) { btn.textContent = '+ Ajouter au portefeuille'; btn.style.background = ''; btn.style.color = ''; btn.style.borderColor = ''; }
+  var cb = document.getElementById('cancel-edit-btn');
+  if (cb) cb.style.display = 'none';
+}
+window.cancelEdit = cancelEdit;
+
+async function updateTrade(id) {
   var ticker = document.getElementById('ticker').value.trim() || '—';
   var achat = parseFloat(document.getElementById('achat').value) || 0;
   var stopVal = parseFloat(document.getElementById('stop-sizing').value) || calcedStop;
   var capital = parseFloat(document.getElementById('capital').value) || 0;
   var pct = parseFloat(document.getElementById('pct').value) || 50;
+  var risquepct = parseFloat(document.getElementById('risquepct').value) || 2;
   if (nbTitresCurrent <= 0 || capital <= 0) { showToast('Paramètres invalides', 'error'); return; }
-  var existing = trades.find(function(t) { return t.ticker.toLowerCase() === ticker.toLowerCase(); });
-  if (existing && !confirm(ticker + ' est déjà dans ton portefeuille. Ajouter quand même ?')) return;
+  var trade = {ticker:ticker, achat:achat, stop:stopVal, target:calcedTarget, nb:nbTitresCurrent, investi:investiCurrent, risque:risqueEurCurrent, gain:nbTitresCurrent*(calcedTarget-achat), pct:pct, capital:capital, risquepct:risquepct};
+  try {
+    var result = await db.from('trades').update({data: trade}).eq('id', id).eq('smf_username', currentUserId);
+    if (result.error) { showToast('Erreur mise à jour', 'error'); return; }
+    var idx = trades.findIndex(function(x){ return x.id === id; });
+    if (idx >= 0) trades[idx] = Object.assign({}, trade, {id:id, created_at:trades[idx].created_at});
+    renderTrades(capital);
+    showToast('Trade mis à jour !', 'success');
+    cancelEdit();
+  } catch(e) { console.error(e); showToast('Erreur mise à jour', 'error'); }
+}
+
+async function addTrade() {
+  if (!currentUserId) { showToast("Connectez-vous d'abord", 'error'); return; }
+  if (editingTradeId) { await updateTrade(editingTradeId); return; }
+  var ticker = document.getElementById('ticker').value.trim() || '—';
+  var achat = parseFloat(document.getElementById('achat').value) || 0;
+  var stopVal = parseFloat(document.getElementById('stop-sizing').value) || calcedStop;
+  var capital = parseFloat(document.getElementById('capital').value) || 0;
+  var pct = parseFloat(document.getElementById('pct').value) || 50;
+  var risquepct = parseFloat(document.getElementById('risquepct').value) || 2;
+  if (nbTitresCurrent <= 0 || capital <= 0) { showToast('Paramètres invalides', 'error'); return; }
+  var existing = trades.find(function(t){ return t.ticker.toLowerCase() === ticker.toLowerCase(); });
+  if (existing && !confirm(ticker + ' est déjà dans votre portefeuille. Ajouter quand même ?')) return;
   var btn = document.querySelector('button[onclick="addTrade()"]');
-  if (btn) { btn.disabled = true; btn.textContent = 'Sauvegarde…'; }
-  var trade = {ticker: ticker, achat: achat, stop: stopVal, target: calcedTarget, nb: nbTitresCurrent, investi: investiCurrent, risque: risqueEurCurrent, gain: nbTitresCurrent * (calcedTarget - achat), pct: pct, capital: capital};
+  if (btn) { btn.disabled = true; btn.textContent = 'Sauvegarde\u2026'; }
+  var trade = {ticker:ticker, achat:achat, stop:stopVal, target:calcedTarget, nb:nbTitresCurrent, investi:investiCurrent, risque:risqueEurCurrent, gain:nbTitresCurrent*(calcedTarget-achat), pct:pct, capital:capital, risquepct:risquepct};
   var newId = await saveTrade(trade);
   if (btn) { btn.disabled = false; btn.textContent = '+ Ajouter au portefeuille'; }
   if (!newId) return;
-  trades.push(Object.assign({}, trade, {id: newId}));
+  trades.push(Object.assign({}, trade, {id:newId}));
   renderTrades(capital);
-  document.getElementById('portefeuille').scrollIntoView({behavior: 'smooth', block: 'start'});
+  document.getElementById('portefeuille').scrollIntoView({behavior:'smooth', block:'start'});
 }
 
 async function removeTrade(id) {
