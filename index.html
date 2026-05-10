@@ -864,18 +864,23 @@ async function updateTrade(id) {
 }
 
 async function addTrade() {
-  if (!currentUser) { showToast('Entre ton pseudo d\'abord', 'error'); return; }
+  if (!currentUserId) { showToast("Connectez-vous d'abord", 'error'); return; }
+
+  // Mode édition — met à jour au lieu d'ajouter
+  if (editingTradeId) { await updateTrade(editingTradeId); return; }
+
   var ticker = document.getElementById('ticker').value.trim() || '—';
   var achat = parseFloat(document.getElementById('achat').value) || 0;
   var stopVal = parseFloat(document.getElementById('stop-sizing').value) || calcedStop;
   var capital = parseFloat(document.getElementById('capital').value) || 0;
   var pct = parseFloat(document.getElementById('pct').value) || 50;
+  var risquepct = parseFloat(document.getElementById('risquepct').value) || 2;
   if (nbTitresCurrent <= 0 || capital <= 0) { showToast('Paramètres invalides', 'error'); return; }
   var existing = trades.find(function(t) { return t.ticker.toLowerCase() === ticker.toLowerCase(); });
-  if (existing && !confirm(ticker + ' est déjà dans ton portefeuille. Ajouter quand même ?')) return;
-  var btn = document.querySelector('button[onclick="addTrade()"]');
+  if (existing && !confirm(ticker + ' est déjà dans votre portefeuille. Ajouter quand même ?')) return;
+  var btn = document.getElementById('add-trade-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Sauvegarde…'; }
-  var trade = {ticker: ticker, achat: achat, stop: stopVal, target: calcedTarget, nb: nbTitresCurrent, investi: investiCurrent, risque: risqueEurCurrent, gain: nbTitresCurrent * (calcedTarget - achat), pct: pct, capital: capital};
+  var trade = {ticker:ticker, achat:achat, stop:stopVal, target:calcedTarget, nb:nbTitresCurrent, investi:investiCurrent, risque:risqueEurCurrent, gain:nbTitresCurrent*(calcedTarget-achat), pct:pct, capital:capital, risquepct:risquepct};
   var newId = await saveTrade(trade);
   if (btn) { btn.disabled = false; btn.textContent = '+ Ajouter au portefeuille'; }
   if (!newId) return;
